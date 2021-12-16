@@ -1050,8 +1050,19 @@ def decodeAC_U_V(bits):
 
 
 # ----------------------------------------------------------------------------
+def prepare_blocks(blocks):
+    for i in range(len(blocks)):
+        last_zero = 63
+        print("before", blocks[i])
+        while blocks[i][last_zero] == 0 and last_zero > 0:
+            last_zero -= 1
+        blocks[i] = blocks[i][:last_zero + 1]
+        print("after", blocks[i])
+    return blocks
+
 
 def encoder(blocks):
+    blocks = prepare_blocks(blocks)
     bits = []
     prev_DCY = 0
     prev_DCU = 0
@@ -1107,21 +1118,29 @@ def encode_block(block, prev):
     bits += encodeDC(block[0], prev)
     # print(bits)
     prev = block[0]
+    print('try1', block, len(block))
     block = block[1:]
-    zeros = 0
-    # print("block", block)
-    while len(block) > 0:
-        if zeros == 16:
-            bits += encode_YAC_HT[240]
-            zeros = 0
-        if block[0] == 0:
-            zeros += 1
-        else:
-            bits += encodeAC(block[0], zeros)
-            # print("add", encodeAC(block[0], zeros))
-            zeros = 0
-        block = block[1:]
-    bits += EOB
+    print('try', block, len(block))
+    if len(block) == 0:
+        bits += [0]
+        print("yes")
+    else:
+        bits += [1]
+        print('no')
+        zeros = 0
+        # print("block", block)
+        while len(block) > 0:
+            if zeros == 16:
+                bits += encode_YAC_HT[240]
+                zeros = 0
+            if block[0] == 0:
+                zeros += 1
+            else:
+                bits += encodeAC(block[0], zeros)
+                # print("add", encodeAC(block[0], zeros))
+                zeros = 0
+            block = block[1:]
+        bits += EOB
     return bits, prev
 
 
@@ -1130,19 +1149,22 @@ def decode_block(bits):
     DC, offset = decodeDC(bits)
     decoded_block.append(DC)
     bits = bits[offset:]
-    while len(bits) > 0:
-        # print(bits)
-        AC, zeros, offset = decodeAC(bits)
-        if AC == 0 and zeros == 64:  # если EOB
+    bit_eob = bits[0]
+    bits = bits[1:]
+    if bit_eob == 1:
+        while len(bits) > 0:
+            # print(bits)
+            AC, zeros, offset = decodeAC(bits)
+            if AC == 0 and zeros == 64:  # если EOB
+                bits = bits[offset:]
+                break
+            # print("AC", AC, offset)
+            for i in range(zeros):
+                decoded_block.append(0)
+            decoded_block.append(AC)
             bits = bits[offset:]
-            break
-        # print("AC", AC, offset)
-        for i in range(zeros):
-            decoded_block.append(0)
-        decoded_block.append(AC)
-        bits = bits[offset:]
-        if len(decoded_block) == 64:
-            break
+            if len(decoded_block) == 64:
+                break
     while len(decoded_block) < 64:
         decoded_block.append(0)
     return decoded_block, bits
@@ -1158,20 +1180,24 @@ def encode_block_U_V(block, prev):
     # print(bits)
     prev = block[0]
     block = block[1:]
-    zeros = 0
-    # print("block", block)
-    while len(block) > 0:
-        if zeros == 16:
-            bits += encode_UVAC_HT[240]
-            zeros = 0
-        if block[0] == 0:
-            zeros += 1
-        else:
-            bits += encodeAC_U_V(block[0], zeros)
-            # print("add", encodeAC(block[0], zeros))
-            zeros = 0
-        block = block[1:]
-    bits += EOB
+    if len(block) == 0:
+        bits += [0]
+    else:
+        bits += [1]
+        zeros = 0
+        # print("block", block)
+        while len(block) > 0:
+            if zeros == 16:
+                bits += encode_UVAC_HT[240]
+                zeros = 0
+            if block[0] == 0:
+                zeros += 1
+            else:
+                bits += encodeAC_U_V(block[0], zeros)
+                # print("add", encodeAC(block[0], zeros))
+                zeros = 0
+            block = block[1:]
+        bits += EOB
     return bits, prev
 
 
@@ -1180,19 +1206,22 @@ def decode_block_U_V(bits):
     DC, offset = decodeDC_U_V(bits)
     decoded_block.append(DC)
     bits = bits[offset:]
-    while len(bits) > 0:
-        # print(bits)
-        AC, zeros, offset = decodeAC_U_V(bits)
-        if AC == 0 and zeros == 64:  # если EOB
+    bit_eob = bits[0]
+    bits = bits[1:]
+    if bit_eob == 1:
+        while len(bits) > 0:
+            # print(bits)
+            AC, zeros, offset = decodeAC_U_V(bits)
+            if AC == 0 and zeros == 64:  # если EOB
+                bits = bits[offset:]
+                break
+            # print("AC", AC, zeros, offset)
+            for i in range(zeros):
+                decoded_block.append(0)
+            decoded_block.append(AC)
             bits = bits[offset:]
-            break
-        # print("AC", AC, zeros, offset)
-        for i in range(zeros):
-            decoded_block.append(0)
-        decoded_block.append(AC)
-        bits = bits[offset:]
-        if len(decoded_block) == 64:
-            break
+            if len(decoded_block) == 64:
+                break
     while len(decoded_block) < 64:
         decoded_block.append(0)
     return decoded_block, bits
